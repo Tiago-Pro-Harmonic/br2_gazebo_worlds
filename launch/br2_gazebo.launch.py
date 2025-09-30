@@ -38,54 +38,36 @@ def start_gzserver(context, *args, **kwargs):
 
     params_file = PathJoinSubstitution(
         substitutions=[pkg_path, 'config', 'gazebo_params.yaml'])
-
-    # Command to start the gazebo server.
-    gazebo_server_cmd_line = [
-        'gz', 'sim', world, '-r' , '-s']
-    # Start the server under the gdb framework.
-    debug = LaunchConfiguration('debug').perform(context)
-    if debug == 'True':
-        gazebo_server_cmd_line = (
-            ['xterm', '-e', 'gdb', '-ex', 'run', '--args'] +
-            gazebo_server_cmd_line
-        )
-
-    # start_gazebo_server_cmd = ExecuteProcess(
-    #     cmd=gazebo_server_cmd_line, output='screen')
-
-    start_gazebo_server_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory('ros_gz_sim'), 'launch',
-                         'gz_sim.launch.py')),
-        launch_arguments={'gz_args': ['-r -s ', world]}.items()
-    )
-
-    start_gazebo_client_cmd = IncludeLaunchDescription(
+    
+    start_gazebo_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory('ros_gz_sim'),
                          'launch',
-                         'gz_sim.launch.py')
-        ),
-        launch_arguments={'gz_args': [' -g ']}.items(),
+                         'gz_sim.launch.py')),
+        launch_arguments={'gz_args': ['-r ', world], 'gui': 'true'}.items()
     )
 
-
-    return [start_gazebo_server_cmd, start_gazebo_client_cmd]
+    return [start_gazebo_cmd]
 
 
 def generate_launch_description():
-    model_path = ''
-    resource_path = ''
+    model_paths = []
+    resource_paths = []
 
     # Add br2_gazebo_worlds path
     pkg_path = get_package_share_directory('br2_gazebo_worlds')
-    model_path += os.path.join(pkg_path, 'models')
-    resource_path += pkg_path + model_path
+    model_paths.append(os.path.join(pkg_path, 'models'))
+    resource_paths.append(os.path.join(pkg_path, 'worlds'))
+    resource_paths.append(os.path.join(pkg_path, 'models'))
 
     if 'GZ_SIM_MODEL_PATH' in environ:
-        model_path += pathsep+environ['GZ_SIM_MODEL_PATH']
+        model_paths.append(environ['GZ_SIM_MODEL_PATH'])
     if 'GZ_SIM_RESOURCE_PATH' in environ:
-        resource_path += pathsep+environ['GZ_SIM_RESOURCE_PATH']
+        resource_paths.append(environ['GZ_SIM_RESOURCE_PATH'])
+        
+    final_model_path = pathsep.join(model_paths)
+    final_resource_path = pathsep.join(resource_paths)
+    
 
     declare_world_name = DeclareLaunchArgument(
         'world_name', default_value='',
@@ -101,12 +83,13 @@ def generate_launch_description():
 
     # Create the launch description and populate
     ld = LaunchDescription()
+    
+    ld.add_action(SetEnvironmentVariable('GZ_SIM_MODEL_PATH', final_model_path))
+    ld.add_action(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', final_resource_path))
 
-    ld.add_action(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', model_path))
     ld.add_action(declare_debug)
     ld.add_action(declare_world_name)
 
-    ld.add_action(SetEnvironmentVariable('GZ_SIM_MODEL_PATH', model_path))
     # Using this prevents shared library from being found
     # ld.add_action(SetEnvironmentVariable('GAZEBO_RESOURCE_PATH', resource_path))
 
